@@ -1,6 +1,10 @@
 [package]
-name = "LeechonProLibrary"
+name = "leechon_pro_library"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+byteorder = "1.4"
+
+[lib]
+crate-type = ["rlib"]
