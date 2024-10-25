@@ -1,6 +1,8 @@
 //use std::ptr;
 use byteorder::{ByteOrder, BigEndian};
+//use crate::lib_app_config::AppConfig;
 
+#[derive(Clone)]
 pub struct DataBuffer
 {
     pub data_vec: Vec<u8>,
@@ -237,7 +239,7 @@ impl DataBuffer
             }
             result.push( character );
         }
-
+        
         result
     }
 
