@@ -49,80 +49,81 @@ impl DateTime
 impl DateTime
 {
 
-fn p_is_leap_year( &self ) -> bool {
-    (self.year % 4 == 0 && self.year % 100 != 0) || (self.year % 400 == 0)
-}
-
-fn p_days_in_month(&self ) -> i64 {
-    match self.month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 => if self.p_is_leap_year() { 29 } else { 28 },
-        _ => 0,
+    fn p_is_leap_year( &self ) -> bool {
+        (self.year % 4 == 0 && self.year % 100 != 0) || (self.year % 400 == 0)
     }
-}
 
-fn p_convert_seconds( &mut self, total_seconds: i64) 
-{
-    self.year = 1970; // UNIX_EPOCH 기준으로 시작
-    self.month = 1;
-    self.day = 1;
-    let mut seconds = total_seconds + self.offset as i64;
-    self.week = ( ( ( seconds / SECONDS_IN_A_DAY ) + 4 ) % 7 ) as u8;
-
-    let mut year_seconds = 0;
-    let mut month_seconds = 0;
-
-
-    self.second = ( seconds % SECONDS_IN_A_MINUTE ) as u8;
-    seconds -= self.second as i64;
-    self.minute = ( ( seconds % SECONDS_IN_AN_HOUR ) / 60 ) as u8 ;
-    seconds -= ( self.minute  ) as i64* 60;
-    self.hour = ( ( seconds % SECONDS_IN_A_DAY ) / 60 / 60 ) as u8;
-    seconds -= ( self.hour ) as i64 * 60 * 60;
-    
-    loop
-    {
-        if self.p_is_leap_year()
-        {
-            year_seconds = 366 * SECONDS_IN_A_DAY;
+    fn p_days_in_month(&self ) -> i64 {
+        match self.month {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 => if self.p_is_leap_year() { 29 } else { 28 },
+            _ => 0,
         }
-        else
+    }
+
+    fn p_convert_seconds( &mut self, total_seconds: i64) 
+    {
+        self.year = 1970; // UNIX_EPOCH 기준으로 시작
+        self.month = 1;
+        self.day = 1;
+        let mut seconds = total_seconds + self.offset as i64;
+        self.week = ( ( ( seconds / SECONDS_IN_A_DAY ) + 4 ) % 7 ) as u8;
+
+
+
+        self.second = ( seconds % SECONDS_IN_A_MINUTE ) as u8;
+        seconds -= self.second as i64;
+        self.minute = ( ( seconds % SECONDS_IN_AN_HOUR ) / 60 ) as u8 ;
+        seconds -= ( self.minute  ) as i64* 60;
+        self.hour = ( ( seconds % SECONDS_IN_A_DAY ) / 60 / 60 ) as u8;
+        seconds -= ( self.hour ) as i64 * 60 * 60;
+        
+        loop
         {
-            year_seconds = 365 * SECONDS_IN_A_DAY;
+            let year_seconds;
+        
+            if self.p_is_leap_year()
+            {
+                year_seconds = 366 * SECONDS_IN_A_DAY;
+            }
+            else
+            {
+                year_seconds = 365 * SECONDS_IN_A_DAY;
+            }
+            
+            if year_seconds < seconds
+            {
+                self.year += 1;
+                seconds -= year_seconds;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        loop
+        {
+            let month_seconds;
+            month_seconds = self.p_days_in_month() * SECONDS_IN_A_DAY;
+
+            if ( month_seconds - SECONDS_IN_A_DAY ) < seconds
+            {
+                self.month += 1;
+                seconds -= month_seconds;
+            }
+            else
+            {
+                break;
+            }
+
         }
         
-        if year_seconds < seconds
-        {
-            self.year += 1;
-            seconds -= year_seconds;
-        }
-        else
-        {
-            break;
-        }
+        self.day += ( seconds / SECONDS_IN_A_DAY ) as u8;
+
+
+        self.full_seconds = total_seconds;
     }
-
-    loop
-    {
-        month_seconds = self.p_days_in_month() * SECONDS_IN_A_DAY;
-
-        if ( month_seconds - SECONDS_IN_A_DAY ) < seconds
-        {
-            self.month += 1;
-            seconds -= month_seconds;
-        }
-        else
-        {
-            break;
-        }
-
-    }
-    
-    self.day += ( seconds / SECONDS_IN_A_DAY ) as u8;
-
-
-    self.full_seconds = total_seconds;
-}
 
 }
