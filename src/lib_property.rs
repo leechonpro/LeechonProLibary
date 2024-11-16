@@ -34,3 +34,11 @@ pub mod env_val
 #[cfg(target_os = "windows")]
     pub const OS: env_os::OS = env_os::WINDOW;
 }
+
+pub mod sock_val
+{
+    pub const PACKET_HEAD_SIZE: usize = 4;
+    pub const PACKET_CHECK: u16 = 50000;
+    pub const SERVER: u32 = 1;
+    pub const CLIENT: u32 = 2;
+}

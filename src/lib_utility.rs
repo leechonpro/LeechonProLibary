@@ -32,7 +32,9 @@ pub mod util
     const PRIME_SIZE: usize = 540;
     static mut RAND_CNT : u64= 0;    
     use crate::{DataBuffer};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{SystemTime, UNIX_EPOCH,Duration};
+    use std::thread;
+
 
     pub fn get_random_u64() -> u64
     {
@@ -88,6 +90,10 @@ pub mod util
         )
     }
 
+    pub fn sleep( time : u64 )
+    {
+        thread::sleep(Duration::from_millis(time));
+    }
     pub fn encode_base64( data: Vec<u8> ) -> String
     {
         let mut result = String::new();

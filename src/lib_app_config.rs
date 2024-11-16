@@ -175,10 +175,9 @@ impl AppConfig
     {
         let mut buffer = DataBuffer::new();
         buffer.set_u16( logging_level::ERROR );
-        buffer.set_string( text );
+        buffer.set_string( text.clone() );
 
         AppConfig::get_instance().lock().unwrap().p_push_message( module_id::LOGGING, buffer );
-        
     }
 
 }
