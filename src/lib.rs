@@ -16,4 +16,4 @@ pub use lib_log_system::LogSystem;
 pub use lib_property::{event_id,logging_level,module_id,env_os, env_val, sock_val};
 pub use lib_utility::util;
 pub use lib_file_io::FileIO;
-pub use lib_communication_unit::{CommunicationUnit,ClientSocket,ServerSocket};
+pub use lib_communication_unit::{CommunicationUnit,ClientSocket,ServerSocket,Pipe};
