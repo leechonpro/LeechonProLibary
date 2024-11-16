@@ -20,6 +20,7 @@ impl DataBuffer
     {
         self.data_vec.push( input );
     }
+
     pub fn get_u8( &mut self ) -> u8
     {
         let mut result: u8 = 0;
@@ -51,13 +52,12 @@ impl DataBuffer
         }
         
         result
-    }
-    
+    }    
 
     pub fn set_u16( &mut self,input: u16 )
     {
 
-        self.data_vec.push( ( input & 0xff00 >> 8 ) as u8 );
+        self.data_vec.push( ( ( input & 0xff00 ) >> 8 ) as u8 );
         self.data_vec.push( ( input & 0x00ff ) as u8 );
     }
 
@@ -148,6 +148,33 @@ impl DataBuffer
         
         result
     }
+    
+    pub fn set_u64( &mut self,input: u64 )
+    {
+        self.set_u32( ( ( input & 0xffffffff00000000 ) >> 32 ) as u32 );
+        self.set_u32( ( input & 0x00000000ffffffff ) as u32 );
+    }
+
+    pub fn get_u64( &mut self ) -> u64
+    {
+        let mut result: u64 = 0;
+        let size = self.data_vec.len();
+
+        if ( self.index + 7 ) < size
+        {
+            result |= ( self.data_vec[self.index] as u64 ) << 56 ;
+            result |= ( self.data_vec[self.index] as u64 ) << 48 ;
+            result |= ( self.data_vec[self.index] as u64 ) << 40 ;
+            result |= ( self.data_vec[self.index] as u64 ) << 32 ;
+            result |= ( self.data_vec[self.index] as u64 ) << 24 ;
+            result |= ( self.data_vec[self.index + 1] as u64 ) << 16;
+            result |= ( self.data_vec[self.index + 2] as u64 ) << 8 ;
+            result |= self.data_vec[self.index + 3] as u64;
+            self.index += 8;
+        }
+        
+        result
+    }
 
     pub fn set_f32( &mut self, input: f32 )
     {
@@ -217,20 +244,19 @@ impl DataBuffer
         let input_chars:Vec<char> = input.chars().collect();
         let input_len = input_chars.len();
 
-        self.set_u32( input_len as u32 );
 
         for index in 0..input_len
         {
             self.set_char( input_chars[index] );
         }
+        self.set_char( '\0' );
     }
 
     pub fn get_string( &mut self ) -> String
     {
         let mut result = String::new();
-        let size: usize = self.get_u32() as usize;
 
-        for _index in 0..size
+        loop
         {
             let character = self.get_char();
             if '\0' == character
@@ -285,5 +311,15 @@ impl DataBuffer
     pub fn get_size( &mut self ) -> usize
     {
         self.data_vec.len()
+    }
+
+    pub fn get_buffer_vec( self ) -> Vec<u8>
+    {
+        self.data_vec
+    }
+
+    pub fn set_buffer_vec( &mut self, data : Vec<u8> )
+    {
+        self.data_vec = data;
     }
 }

@@ -3,18 +3,17 @@ use std::time::Instant;
 use std::sync::{mpsc, Arc, Mutex,Once};
 use std::collections::HashMap;
 
-use crate::{Worker,DataBuffer,ThreadWorker};
+use crate::{Worker,DataBuffer,ThreadWorker,LogSystem,module_id,logging_level};
 //use crate::DataBuffer;
-type ModuleID = i32;
 
 pub struct AppConfig
 {
     app_name: String,
     version: String,
-    message_queue: HashMap<ModuleID,mpsc::Sender<( ModuleID, DataBuffer )>>,
-    thread_map: HashMap<ModuleID, ThreadWorker>,
+    message_queue: HashMap<module_id::ID,mpsc::Sender<( module_id::ID, DataBuffer )>>,
+    thread_map: HashMap<module_id::ID, ThreadWorker>,
     tick_counter: Instant,
-    read_queue:mpsc::Receiver<( ModuleID, DataBuffer )>,
+    read_queue:mpsc::Receiver<( module_id::ID, DataBuffer )>,
 }
 
 //public function
@@ -33,13 +32,15 @@ impl AppConfig
         });
     }
 
-    fn update()
+    fn update( )
     {
-        let (id,mut data) = AppConfig::get_instance().lock().unwrap().p_pop_message();
+        let binding = AppConfig::get_instance();
+        let mut inst = binding.lock().unwrap();
+        let( id, data ) = inst.p_pop_message();
+//        let (id,mut data) = AppConfig::get_instance().lock().unwrap().p_pop_message();
         if id > 0
         {
-            let text = data.get_string();
-            println!("{}", text);
+            inst.p_push_message( id, data );
         }
         else
         {
@@ -96,20 +97,27 @@ impl AppConfig
         AppConfig::get_instance().lock().unwrap().p_set_app_name( app_name );
     }
 
-    pub fn push_message( id: ModuleID, data: DataBuffer )
+    pub fn push_message( id: module_id::ID, data: DataBuffer )
     {
         AppConfig::get_instance().lock().unwrap().p_push_message( id, data );
     }
 
-    pub fn add_thread( id: ModuleID, module : Box<dyn Worker> )
+    pub fn add_thread( id: module_id::ID, module : Box<dyn Worker> )
     {
-        AppConfig::get_instance().lock().unwrap().p_add_thread( id, module );        
+        {
+            AppConfig::get_instance().lock().unwrap().p_add_thread( id, module );
+        }
+        let mut is_not_ready = true;
+        while is_not_ready
+        {
+            is_not_ready = !AppConfig::get_instance().lock().unwrap().p_is_channel_available( id );    
+        }
     }
-    pub fn get_thread( id: ModuleID ) -> Option<ThreadWorker>
+    pub fn get_thread( id: module_id::ID ) -> Option<ThreadWorker>
     {
         AppConfig::get_instance().lock().unwrap().p_get_thread( id )
     }
-    pub fn stop_thread( id: ModuleID )
+    pub fn stop_thread( id: module_id::ID )
     {
         AppConfig::get_instance().lock().unwrap().p_stop_thread( id )
     }
@@ -117,10 +125,61 @@ impl AppConfig
     {
         AppConfig::get_instance().lock().unwrap().p_get_tick_count()
     }
-    pub fn create_channel( id:ModuleID ) -> mpsc::Receiver<( ModuleID, DataBuffer )>
+    pub fn create_channel( id:module_id::ID ) -> mpsc::Receiver<( module_id::ID, DataBuffer )>
     {
         AppConfig::get_instance().lock().unwrap().p_create_channel( id )
     }
+    pub fn default_logging()
+    {
+        {
+            let log = LogSystem::console();
+            AppConfig::get_instance().lock().unwrap().p_add_thread( module_id::LOGGING, Box::new( log ) );
+        }
+        let mut is_not_ready = true;
+        while is_not_ready
+        {
+            is_not_ready = !AppConfig::get_instance().lock().unwrap().p_is_channel_available( module_id::LOGGING );    
+        }
+    }
+
+    pub fn log_info( text: String )
+    {
+        let mut buffer = DataBuffer::new();
+        buffer.set_u16( logging_level::INFO );
+        buffer.set_string( text );
+
+        AppConfig::get_instance().lock().unwrap().p_push_message( module_id::LOGGING, buffer );
+    }
+    
+    pub fn log_debug( text: String )
+    {
+        let mut buffer = DataBuffer::new();
+        buffer.set_u16( logging_level::DEBUG );
+        buffer.set_string( text );
+
+        AppConfig::get_instance().lock().unwrap().p_push_message( module_id::LOGGING, buffer );
+        
+    }
+    
+    pub fn log_warn( text: String )
+    {
+        let mut buffer = DataBuffer::new();
+        buffer.set_u16( logging_level::WARN );
+        buffer.set_string( text );
+
+        AppConfig::get_instance().lock().unwrap().p_push_message( module_id::LOGGING, buffer );
+        
+    }
+    
+    pub fn log_error( text: String )
+    {
+        let mut buffer = DataBuffer::new();
+        buffer.set_u16( logging_level::ERROR );
+        buffer.set_string( text.clone() );
+
+        AppConfig::get_instance().lock().unwrap().p_push_message( module_id::LOGGING, buffer );
+    }
+
 }
 
 impl AppConfig
@@ -145,7 +204,7 @@ impl AppConfig
         self.app_name= app_name;
     }
 
-    fn p_push_message( &mut self, id: ModuleID, data: DataBuffer )
+    fn p_push_message( &mut self, id: module_id::ID, data: DataBuffer )
     {        
         match self.message_queue.get( &id )
         {
@@ -157,7 +216,7 @@ impl AppConfig
         }
     }
     
-    fn p_pop_message( &mut self ) -> ( ModuleID, DataBuffer )
+    fn p_pop_message( &mut self ) -> ( module_id::ID, DataBuffer )
     {
         
         match self.read_queue.try_recv() {
@@ -167,12 +226,12 @@ impl AppConfig
         }
     }
 
-    fn p_get_thread( &mut self, id: ModuleID ) -> Option<ThreadWorker>
+    fn p_get_thread( &mut self, id: module_id::ID ) -> Option<ThreadWorker>
     {
         self.thread_map.remove( &id ) // remove ThreadWorker's ownership
     }
     
-    fn p_add_thread( &mut self, id: ModuleID, mut module : Box<dyn Worker> )
+    fn p_add_thread( &mut self, id: module_id::ID, mut module : Box<dyn Worker> )
     {
         let handle: Option<std::thread::JoinHandle<_>> = Some(thread::spawn(move||
             {
@@ -200,7 +259,9 @@ impl AppConfig
                                             test.worker.recv_event(buffer); 
                                         }
                                     },
-                                    Err(mpsc::TryRecvError::Empty) => {},
+                                    Err(mpsc::TryRecvError::Empty) => {
+                                    //    println!("is empty");
+                                    },
                                     Err(mpsc::TryRecvError::Disconnected) => {},
                                 }
                                 is_running = test.worker.update();
@@ -226,9 +287,11 @@ impl AppConfig
             
         module.initialize();
         self.thread_map.insert( id, ThreadWorker::new( module, handle ) );
+
+
     }
 
-    fn p_stop_thread( &mut self, id:ModuleID )
+    fn p_stop_thread( &mut self, id:module_id::ID )
     {
         match self.message_queue.get( &id )
         {
@@ -246,15 +309,25 @@ impl AppConfig
         elapsed.as_millis() as u64
     }
 
-    fn p_save_read_channel( &mut self, id:ModuleID, channel:mpsc::Sender<( ModuleID, DataBuffer )>)
+    fn p_save_read_channel( &mut self, id:module_id::ID, channel:mpsc::Sender<( module_id::ID, DataBuffer )>)
     {
         self.message_queue.insert(id, channel );
     }
 
-    fn p_create_channel( &mut self, id:ModuleID ) -> mpsc::Receiver<( ModuleID, DataBuffer )>
+    fn p_create_channel( &mut self, id:module_id::ID ) -> mpsc::Receiver<( module_id::ID, DataBuffer )>
     {
         let (send,read) = mpsc::channel();
         self.p_save_read_channel( id, send );
         read
+    }
+
+    fn p_is_channel_available( &mut self, id:module_id::ID ) -> bool
+    {
+        match self.message_queue.get(&id)
+        {
+            Some(_) => true,
+            None => false,
+        }
+
     }
 }
