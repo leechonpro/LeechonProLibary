@@ -298,6 +298,11 @@ impl DataBuffer
         self.index = 0;
     }
 
+    pub fn get_index( &mut self ) -> usize
+    {
+        self.index
+    }
+
     pub fn is_empty( &mut self ) -> bool
     {
         self.data_vec.is_empty()

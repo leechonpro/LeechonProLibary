@@ -54,7 +54,7 @@ impl ClientSocket
         {
             Some(ref sock) => 
             {
-                sock.set_nonblocking( true );
+                let _ = sock.set_nonblocking( true );
             },
             None => 
             {
@@ -278,7 +278,7 @@ impl CommunicationUnit for ServerSocket
     {
         if sock_val::SERVER == id
         {
-            //sent to all. 
+            // todo impl broad casting. 
         }
         else
         {
