@@ -13,12 +13,13 @@ pub struct AppConfig
     message_queue: HashMap<module_id::ID,mpsc::Sender<( module_id::ID, DataBuffer )>>,
     thread_map: HashMap<module_id::ID, ThreadWorker>,
     tick_counter: Instant,
-    read_queue:mpsc::Receiver<( module_id::ID, DataBuffer )>,
+    read_queue:mpsc::Receiver<( module_id::ID, DataBuffer )>, 
 }
 
 //public function
 impl AppConfig
 {
+// Common
     pub fn start()
     {        
         let _ = thread::spawn(||
@@ -37,7 +38,7 @@ impl AppConfig
         let binding = AppConfig::get_instance();
         let mut inst = binding.lock().unwrap();
         let( id, data ) = inst.p_pop_message();
-//        let (id,mut data) = AppConfig::get_instance().lock().unwrap().p_pop_message();
+        //let (id,mut data) = AppConfig::get_instance().lock().unwrap().p_pop_message();
         if id > 0
         {
             inst.p_push_message( id, data );
@@ -67,7 +68,7 @@ impl AppConfig
         static ONCE: Once = Once::new();
         static mut INSTANCE: Option<Arc<Mutex<AppConfig>>> = None;
         
-        // unsafe code
+        // WARNING : unsafe code
         unsafe {
             ONCE.call_once(|| {
                 INSTANCE = Some(Arc::new(Mutex::new(AppConfig::new())));
@@ -76,7 +77,7 @@ impl AppConfig
             INSTANCE.as_ref().unwrap().clone()
         }
     }
-
+// Program Info
     pub fn get_version() -> String
     {
         AppConfig::get_instance().lock().unwrap().p_get_version()
@@ -97,6 +98,7 @@ impl AppConfig
         AppConfig::get_instance().lock().unwrap().p_set_app_name( app_name );
     }
 
+// Multi threading
     pub fn push_message( id: module_id::ID, data: DataBuffer )
     {
         AppConfig::get_instance().lock().unwrap().p_push_message( id, data );
@@ -110,25 +112,42 @@ impl AppConfig
         let mut is_not_ready = true;
         while is_not_ready
         {
-            is_not_ready = !AppConfig::get_instance().lock().unwrap().p_is_channel_available( id );    
+            is_not_ready = !AppConfig::get_instance().lock().unwrap().p_is_pipe_available( id );    
         }
     }
+
     pub fn get_thread( id: module_id::ID ) -> Option<ThreadWorker>
     {
         AppConfig::get_instance().lock().unwrap().p_get_thread( id )
     }
+
     pub fn stop_thread( id: module_id::ID )
     {
         AppConfig::get_instance().lock().unwrap().p_stop_thread( id )
     }
+
+// util
     pub fn get_tick_count() -> u64
     {
         AppConfig::get_instance().lock().unwrap().p_get_tick_count()
     }
-    pub fn create_channel( id:module_id::ID ) -> mpsc::Receiver<( module_id::ID, DataBuffer )>
+
+// Pipe ( communication )
+    pub fn create_pipe( id:module_id::ID ) -> mpsc::Receiver<( module_id::ID, DataBuffer )>
     {
-        AppConfig::get_instance().lock().unwrap().p_create_channel( id )
+        AppConfig::get_instance().lock().unwrap().p_create_pipe( id )
     }
+
+    pub fn get_pipe( id:module_id::ID ) -> Option<mpsc::Sender<( module_id::ID, DataBuffer )>>
+    {
+        AppConfig::get_instance().lock().unwrap().p_get_pipe(id)
+    }
+
+    pub fn remove_pipe( id:module_id::ID )
+    {
+        AppConfig::get_instance().lock().unwrap().p_remove_pipe(id);
+    }
+// Logging
     pub fn default_logging()
     {
         {
@@ -138,7 +157,7 @@ impl AppConfig
         let mut is_not_ready = true;
         while is_not_ready
         {
-            is_not_ready = !AppConfig::get_instance().lock().unwrap().p_is_channel_available( module_id::LOGGING );    
+            is_not_ready = !AppConfig::get_instance().lock().unwrap().p_is_pipe_available( module_id::LOGGING );    
         }
     }
 
@@ -244,7 +263,7 @@ impl AppConfig
                     {
                         Some( ref mut test ) => 
                         {
-                            let read = AppConfig::create_channel( id );
+                            let read = AppConfig::create_pipe( id );
                             while is_running
                             {
                                 
@@ -309,25 +328,40 @@ impl AppConfig
         elapsed.as_millis() as u64
     }
 
-    fn p_save_read_channel( &mut self, id:module_id::ID, channel:mpsc::Sender<( module_id::ID, DataBuffer )>)
+    fn p_register_pipe( &mut self, id:module_id::ID, channel:mpsc::Sender<( module_id::ID, DataBuffer )>)
     {
         self.message_queue.insert(id, channel );
     }
 
-    fn p_create_channel( &mut self, id:module_id::ID ) -> mpsc::Receiver<( module_id::ID, DataBuffer )>
+    fn p_unregister_pipe( &mut self, id:module_id::ID )
+    {
+        self.message_queue.remove(&id);
+    }
+
+    fn p_create_pipe( &mut self, id:module_id::ID ) -> mpsc::Receiver<( module_id::ID, DataBuffer )>
     {
         let (send,read) = mpsc::channel();
-        self.p_save_read_channel( id, send );
+        self.p_register_pipe( id, send );
         read
     }
 
-    fn p_is_channel_available( &mut self, id:module_id::ID ) -> bool
+    fn p_get_pipe( &mut self, id:module_id::ID ) -> Option<mpsc::Sender<( module_id::ID, DataBuffer )>>
+    {
+        self.message_queue.get(&id).cloned()
+    }
+
+    fn p_is_pipe_available( &mut self, id:module_id::ID ) -> bool
     {
         match self.message_queue.get(&id)
         {
             Some(_) => true,
             None => false,
         }
-
     }
+    
+    fn p_remove_pipe( &mut self, id:module_id::ID )
+    {
+        self.message_queue.remove(&id);
+    }
+
 }

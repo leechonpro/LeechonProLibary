@@ -2,6 +2,7 @@
 pub mod module_id
 {
     pub type ID = u32;
+    pub const NO_ID: u32 = 0x00000000;
     pub const APP_CONFIG: u32 = 0x00000001;
     pub const LOGGING: u32 = 0x00000002;
         

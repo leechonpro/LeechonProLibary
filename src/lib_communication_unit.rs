@@ -1,15 +1,16 @@
 use std::net::{TcpStream,TcpListener,Shutdown};
 use std::io::{Read,Write, ErrorKind};
 use std::collections::{HashMap,VecDeque};
+use std::sync::mpsc;
 
-use crate::{AppConfig, DataBuffer, sock_val};
+use crate::{AppConfig, DataBuffer, sock_val,module_id };
 
 pub trait CommunicationUnit
 {
     fn connect( &mut self ) -> bool;
     fn disconnect( &mut self );
     fn write( &mut self, id: u32, buffer: &mut DataBuffer );
-    fn read( &mut self ) -> ( u32, DataBuffer );
+    fn read( &mut self ) -> Option<( u32, DataBuffer )>;
 }
 
 pub struct ClientSocket
@@ -53,7 +54,7 @@ impl ClientSocket
         {
             Some(ref sock) => 
             {
-                sock.set_nonblocking( true );
+                let _ = sock.set_nonblocking( true );
             },
             None => 
             {
@@ -74,7 +75,6 @@ impl CommunicationUnit for ClientSocket
 {
     fn connect( &mut self ) -> bool
     {
-        self.disconnect();
         self.socket = Some( TcpStream::connect( &(format!("{}:{}", self.ip_address, self.port) )).expect("ClientSocket::connect") );
         AppConfig::log_debug(format!( "try to connect : {}",format!("{}:{}", self.ip_address, self.port) ) );
         match &self.socket
@@ -120,7 +120,7 @@ impl CommunicationUnit for ClientSocket
         }
     }
 
-    fn read( &mut self ) -> ( u32, DataBuffer )
+    fn read( &mut self ) -> Option<( u32, DataBuffer )>
     {
         match &mut self.socket
         {
@@ -142,9 +142,9 @@ impl CommunicationUnit for ClientSocket
                                 {
                                     let mut buffer = DataBuffer::new();
                                     buffer.set_buffer_vec( buf.clone() );
-                                    return ( 
+                                    return Some(( 
                                         if self.is_server{sock_val::CLIENT} else {sock_val::SERVER},
-                                        buffer );
+                                        buffer ));
                                 },
                                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                                     //No data                                
@@ -172,7 +172,7 @@ impl CommunicationUnit for ClientSocket
             },
         }
 
-        ( if self.is_server{sock_val::SERVER} else {sock_val::CLIENT}, DataBuffer::new() )
+        None
     }
 }
 
@@ -278,7 +278,7 @@ impl CommunicationUnit for ServerSocket
     {
         if sock_val::SERVER == id
         {
-            //sent to all. 
+            // todo impl broad casting. 
         }
         else
         {
@@ -295,25 +295,143 @@ impl CommunicationUnit for ServerSocket
         }
     }
 
-    fn read( &mut self ) -> ( u32, DataBuffer )
+    fn read( &mut self ) -> Option<( u32, DataBuffer )>
     {
         for (client_id, socket) in &mut self.client_list
         {
-            let (id, message) = socket.read();
-            if id == sock_val::CLIENT
+            
+            match socket.read()
             {
-                self.message_queue.push_back( (*client_id, message) );
+                Some( ( client_id, message ) ) => self.message_queue.push_back( (client_id, message) ),
+                None => {},
             }
         }
 
         if 0 < self.message_queue.len()
         {
-            self.message_queue.pop_front().expect("ServerSocket::read")
+            Some( self.message_queue.pop_front().expect("ServerSocket::read") )
         }
         else
         {
-            ( sock_val::SERVER, DataBuffer::new() )
+            None
         }
     }
     
+}
+
+pub struct Pipe
+{
+    send_pipe: Option<mpsc::Sender<( module_id::ID, DataBuffer )>>,
+    recv_pipe: Option<mpsc::Receiver<( module_id::ID, DataBuffer )>>, 
+    src_id: module_id::ID,
+    dest_id: module_id::ID,
+}
+
+impl Pipe
+{
+    pub fn new( src_id: module_id::ID, dest_id: module_id::ID ) -> Self
+    {
+        Pipe
+        {
+            send_pipe: None,
+            recv_pipe: None,
+            src_id,
+            dest_id,
+        }
+    }
+}
+
+impl CommunicationUnit for Pipe
+{
+    fn connect( &mut self ) -> bool
+    {        
+        if module_id::NO_ID == self.src_id
+        {
+            AppConfig::log_debug( String::from( "This pipe is singled pipe." ) );
+        }
+        else
+        {
+            match self.recv_pipe
+            {
+                Some(_) => {},
+                None => { self.recv_pipe = Some( AppConfig::create_pipe( self.src_id ) ); }
+            }
+        }
+
+        match AppConfig::get_pipe( self.dest_id )
+        {
+            Some( pipe ) =>
+            {
+                self.send_pipe = Some( pipe );
+                true
+            }
+            None =>
+            {
+                AppConfig::log_warn(format!("Destination pipe is not registered yet. : {}", self.dest_id ) );
+                false
+            }
+        }
+    }
+
+    fn disconnect( &mut self )
+    {
+        self.send_pipe = None;
+        if module_id::NO_ID == self.src_id
+        {
+            self.recv_pipe = None;
+            AppConfig::remove_pipe( self.src_id );
+        }
+        
+    }
+
+    fn write( &mut self, id: u32, buffer: &mut DataBuffer )
+    {
+        match &self.send_pipe
+        {
+            Some( pipe ) => 
+            {
+                let _ = pipe.send( (id, buffer.clone() ) );
+            },
+            None =>
+            {
+                match AppConfig::get_pipe( self.dest_id )
+                {
+                    Some( pipe ) =>
+                    {
+                        self.send_pipe = Some( pipe.clone() );
+                        let _ = pipe.send( (id, buffer.clone() ) );
+                    }
+                    None =>
+                    {
+                        AppConfig::log_warn(format!("Destination pipe is not registered yet. : {}", self.dest_id ) );
+                    }
+                }
+            }
+        }
+        
+    }
+
+    fn read( &mut self ) -> Option<( u32, DataBuffer )>
+    {
+        if module_id::NO_ID == self.src_id
+        {
+            return Some(( module_id::NO_ID as u32,DataBuffer::new() ));
+        }
+        match &self.recv_pipe
+        {
+            Some( pipe ) => 
+            {
+                match pipe.try_recv() {
+                    Ok(value) => Some( value ),
+                    Err(mpsc::TryRecvError::Empty) => None,
+                    Err(mpsc::TryRecvError::Disconnected) => None,
+                }
+            },
+            None =>
+            {
+                AppConfig::log_warn(format!("Destination pipe is not registered yet. : {}", self.src_id ) );
+                None
+            }
+        }
+    }
 }
