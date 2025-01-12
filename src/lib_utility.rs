@@ -94,6 +94,7 @@ pub mod util
     {
         thread::sleep(Duration::from_millis(time));
     }
+
     pub fn encode_base64( data: Vec<u8> ) -> String
     {
         let mut result = String::new();
@@ -108,4 +109,8 @@ pub mod util
         
     }
 
+    pub fn get_thread_id() -> String
+    {
+        format!( "{:?}", thread::current().id() )
+    }
 }

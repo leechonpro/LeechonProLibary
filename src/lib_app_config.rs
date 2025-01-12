@@ -3,7 +3,7 @@ use std::time::Instant;
 use std::sync::{mpsc, Arc, Mutex,Once};
 use std::collections::HashMap;
 
-use crate::{Worker,DataBuffer,ThreadWorker,LogSystem,module_id,logging_level};
+use crate::{Worker,DataBuffer,ThreadWorker,LogSystem,module_id,logging_level,util};
 //use crate::DataBuffer;
 
 pub struct AppConfig
@@ -157,7 +157,7 @@ impl AppConfig
         let mut is_not_ready = true;
         while is_not_ready
         {
-            is_not_ready = !AppConfig::get_instance().lock().unwrap().p_is_pipe_available( module_id::LOGGING );    
+            is_not_ready = !AppConfig::get_instance().lock().unwrap().p_is_pipe_available( module_id::LOGGING );
         }
     }
 
@@ -165,6 +165,7 @@ impl AppConfig
     {
         let mut buffer = DataBuffer::new();
         buffer.set_u16( logging_level::INFO );
+        buffer.set_string( util::get_thread_id() );
         buffer.set_string( text );
 
         AppConfig::get_instance().lock().unwrap().p_push_message( module_id::LOGGING, buffer );
@@ -174,6 +175,7 @@ impl AppConfig
     {
         let mut buffer = DataBuffer::new();
         buffer.set_u16( logging_level::DEBUG );
+        buffer.set_string( util::get_thread_id() );
         buffer.set_string( text );
 
         AppConfig::get_instance().lock().unwrap().p_push_message( module_id::LOGGING, buffer );
@@ -184,6 +186,7 @@ impl AppConfig
     {
         let mut buffer = DataBuffer::new();
         buffer.set_u16( logging_level::WARN );
+        buffer.set_string( util::get_thread_id() );
         buffer.set_string( text );
 
         AppConfig::get_instance().lock().unwrap().p_push_message( module_id::LOGGING, buffer );
@@ -194,6 +197,7 @@ impl AppConfig
     {
         let mut buffer = DataBuffer::new();
         buffer.set_u16( logging_level::ERROR );
+        buffer.set_string( util::get_thread_id() );
         buffer.set_string( text.clone() );
 
         AppConfig::get_instance().lock().unwrap().p_push_message( module_id::LOGGING, buffer );
