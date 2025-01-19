@@ -7,6 +7,7 @@ pub mod lib_property;
 pub mod lib_utility;
 pub mod lib_file_io;
 pub mod lib_communication_unit;
+pub mod lib_json_parser;
 
 pub use lib_data_buffer::DataBuffer;
 pub use lib_app_config::AppConfig;
@@ -17,3 +18,4 @@ pub use lib_property::{event_id,logging_level,module_id,env_os, env_val, sock_va
 pub use lib_utility::util;
 pub use lib_file_io::FileIO;
 pub use lib_communication_unit::{CommunicationUnit,ClientSocket,ServerSocket,Pipe};
+pub use lib_json_parser::{JsonType, JsonParser};

@@ -194,7 +194,7 @@ impl FileIO {
         file_path.exists()
     }
 
-    fn p_read_byte(&self, file: &mut File ) -> char
+    fn p_read_byte(&mut self, file: &mut File ) -> char
     {
         let mut buffer = [0; 1]; 
         let result = file.read(&mut buffer);
@@ -204,13 +204,18 @@ impl FileIO {
             {
                 if 0 == size
                 {
+                    self.last_char = '\0';
                     return '\0';
                 }
             },
-            Error => return '\0',
+            Error => 
+            {
+                self.last_char = '\0';
+                return '\0';
+            }
         }
-        
-        buffer[0] as char
+        self.last_char = buffer[0] as char;
+        self.last_char
     }
 
     pub fn read_bytes(&mut self, size: usize) -> String
@@ -243,35 +248,6 @@ impl FileIO {
     pub fn read_line(&mut self) -> String
     {
         self.read_till_delimeters("\n".to_string() )
-        /*
-        let mut file_result = File::open(&self.file_path);
-        let mut content = String::new();
-        match file_result
-        {
-            Ok(mut file)=>
-            {
-
-                file.seek(self.seek_position);
-                loop
-                {
-                    let ch = self.p_read_byte( &mut file );
-                    if ( '\0' == ch ) || ( '\n' == ch )
-                    {
-                        break;
-                    }
-                    content.push( ch );
-                }
-                let position_result = file.stream_position();
-                match position_result
-                {
-                    Ok(position)=>self.seek_position = std::io::SeekFrom::Start(position),
-                    Error=>{},
-                }
-            },
-            Error=> {},
-        }
-        content
-        */
     }
     pub fn read_till_delimeters( &mut self, delimiters: String ) -> String
     {
@@ -325,5 +301,10 @@ impl FileIO {
             Error=> true,
         }
         
+    }
+
+    pub fn get_last_char( &mut self ) -> char
+    {
+        self.last_char
     }
 }

@@ -269,6 +269,31 @@ impl DataBuffer
         result
     }
 
+    pub fn set_bool( &mut self, input: bool )
+    {
+        if true == input
+        {
+            self.set_u8( 1 );
+        }
+        else
+        {
+            self.set_u8( 0 );
+        }
+    }
+
+    pub fn get_bool( &mut self ) -> bool
+    {
+        let result = self.get_u8();
+        if 0 < result
+        {
+            true
+        }
+        else
+        {
+            false
+        }
+    }
+
     pub fn set_str( &mut self, input : &str )
     {
         self.set_string( String::from( input ) );
